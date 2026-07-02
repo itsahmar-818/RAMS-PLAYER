@@ -386,6 +386,10 @@
             <th style="min-width:150px;">Customer Name</th>
             <th style="width:120px; text-align:right;">Liters</th>
             <th style="width:120px; text-align:right;">Rate (Rs/L)</th>
+            <th style="width:140px; text-align:right;">
+              Pichli Raqam
+              <span class="text-amber-400 font-normal normal-case tracking-normal" style="font-size:9px;"> (Prev. Balance)</span>
+            </th>
             <th style="width:140px; text-align:right;">Total Bill</th>
             <th style="width:130px; text-align:right;">
               Amount Paid
@@ -543,7 +547,7 @@ function newRow(name='', liters='', rate='', paid='') {
   return { id: uid(), name, liters, rate, paid };
 }
 
-function rowBill(r)    { return (parseFloat(r.liters)||0) * (parseFloat(r.rate)||0); }
+function rowBill(r)    { return (parseFloat(r.liters)||0) * (parseFloat(r.rate)||0) + (parseFloat(r.prevbal)||0); }
 function rowBalance(r) { return rowBill(r) - (parseFloat(r.paid)||0); }
 
 /* ──────────────────────────────────────────
@@ -579,6 +583,7 @@ function saveRow(id) {
   row.name   = tr.querySelector('.name-input').value.trim();
   row.liters = tr.querySelector('.inp-liters').value;
   row.rate   = tr.querySelector('.inp-rate').value;
+  row.prevbal= tr.querySelector('.inp-prevbal').value;
   row.paid   = tr.querySelector('.inp-paid').value;
 
   setMonthRows(mk, rows);
@@ -592,10 +597,11 @@ function saveRow(id) {
 function liveCalc(id) {
   const tr = document.querySelector(`tr[data-id="${id}"]`);
   if (!tr) return;
-  const liters = parseFloat(tr.querySelector('.inp-liters').value) || 0;
-  const rate   = parseFloat(tr.querySelector('.inp-rate').value)   || 0;
-  const paid   = parseFloat(tr.querySelector('.inp-paid').value)   || 0;
-  const bill   = liters * rate;
+  const liters  = parseFloat(tr.querySelector('.inp-liters').value)  || 0;
+  const rate    = parseFloat(tr.querySelector('.inp-rate').value)    || 0;
+  const prevbal = parseFloat(tr.querySelector('.inp-prevbal').value) || 0;
+  const paid    = parseFloat(tr.querySelector('.inp-paid').value)    || 0;
+  const bill    = liters * rate + prevbal;
   const bal    = bill - paid;
 
   const billCell = tr.querySelector('.calc-bill');
@@ -725,6 +731,15 @@ function renderSheet() {
           onkeydown="handleEnter(event,'${r.id}')"/>
       </td>
       <td style="text-align:right;">
+        <input class="cell-input inp-prevbal" type="number" min="0" step="1"
+          value="${r.prevbal||''}" placeholder="0"
+          oninput="liveCalc('${r.id}')"
+          onkeydown="handleEnter(event,'${r.id}')"
+          style="border-color:rgba(217,119,6,.35); background:rgba(254,243,199,.35);"
+          onfocus="this.style.borderColor='#D97706';this.style.background='#FEF3C7';"
+          onblur="this.style.borderColor='rgba(217,119,6,.35)';this.style.background='rgba(254,243,199,.35)';"/>
+      </td>
+      <td style="text-align:right;">
         <span class="calc-bill mono text-slate-700 font-medium text-[13px]">Rs ${fmt(bill)}</span>
       </td>
       <td style="text-align:right;">
@@ -761,10 +776,11 @@ function renderFooter(rows) {
   const tfoot = document.getElementById('sheetFoot');
   if (!rows.length) { tfoot.innerHTML = ''; return; }
 
-  const totalLiters = rows.reduce((s, r) => s + (parseFloat(r.liters)||0), 0);
-  const totalBill   = rows.reduce((s, r) => s + rowBill(r), 0);
-  const totalPaid   = rows.reduce((s, r) => s + (parseFloat(r.paid)||0), 0);
-  const totalBal    = totalBill - totalPaid;
+  const totalLiters  = rows.reduce((s, r) => s + (parseFloat(r.liters)||0), 0);
+  const totalPrevbal = rows.reduce((s, r) => s + (parseFloat(r.prevbal)||0), 0);
+  const totalBill    = rows.reduce((s, r) => s + rowBill(r), 0);
+  const totalPaid    = rows.reduce((s, r) => s + (parseFloat(r.paid)||0), 0);
+  const totalBal     = totalBill - totalPaid;
 
   tfoot.innerHTML = `<tr>
     <td colspan="2" class="font-bold text-slate-700">
@@ -772,6 +788,7 @@ function renderFooter(rows) {
     </td>
     <td class="mono text-right">${fmtLit(totalLiters)}</td>
     <td class="text-right text-slate-400">—</td>
+    <td class="mono text-right font-bold" style="color:#D97706;">Rs ${fmt(totalPrevbal)}</td>
     <td class="mono text-right font-bold text-slate-800">Rs ${fmt(totalBill)}</td>
     <td class="mono text-right" style="color:#059669; font-weight:700;">Rs ${fmt(totalPaid)}</td>
     <td class="mono text-right font-bold" style="color:${totalBal > 0 ? '#B91C1C' : totalBal < 0 ? '#059669' : '#64748B'}">
@@ -824,7 +841,7 @@ function exportCSV() {
   if (!rows.length) { showToast('Nothing to export for this month', true); return; }
 
   const label = currentMonthLabel();
-  const header = ['Sr No.','Customer Name','Liters','Rate (Rs/L)','Total Bill (Rs)','Amount Paid (Rs)','Balance (Rs)','Status'];
+  const header = ['Sr No.','Customer Name','Liters','Rate (Rs/L)','Pichli Raqam (Rs)','Total Bill (Rs)','Amount Paid (Rs)','Balance (Rs)','Status'];
   const lines  = [header.join(',')];
 
   rows.forEach((r, i) => {
@@ -834,8 +851,9 @@ function exportCSV() {
     lines.push([
       i + 1,
       `"${(r.name || '').replace(/"/g, '""')}"`,
-      parseFloat(r.liters) || 0,
-      parseFloat(r.rate)   || 0,
+      parseFloat(r.liters)  || 0,
+      parseFloat(r.rate)    || 0,
+      parseFloat(r.prevbal) || 0,
       bill.toFixed(2),
       (parseFloat(r.paid) || 0).toFixed(2),
       Math.abs(bal).toFixed(2),
@@ -895,10 +913,11 @@ document.addEventListener('focusout', function(e) {
   const rows = getMonthRows(mk);
   const row  = rows.find(r => r.id === id);
   if (!row) return;
-  row.name   = tr.querySelector('.name-input').value.trim();
-  row.liters = tr.querySelector('.inp-liters').value;
-  row.rate   = tr.querySelector('.inp-rate').value;
-  row.paid   = tr.querySelector('.inp-paid').value;
+  row.name    = tr.querySelector('.name-input').value.trim();
+  row.liters  = tr.querySelector('.inp-liters').value;
+  row.rate    = tr.querySelector('.inp-rate').value;
+  row.prevbal = tr.querySelector('.inp-prevbal').value;
+  row.paid    = tr.querySelector('.inp-paid').value;
   setMonthRows(mk, rows);
   updateSummary();
 });
